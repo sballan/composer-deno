@@ -17,6 +17,7 @@ export default function PianoRoll({ midiUrl }: PianoRollProps) {
   const notesRef = useRef<VisualNote[]>([]);
   const metadataRef = useRef<VisualMetadata | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +62,7 @@ export default function PianoRoll({ midiUrl }: PianoRollProps) {
     }
   }, []);
 
-  // Load and parse MIDI file
+  // Load and parse MIDI file from URL
   const loadMIDIFile = async (url: string) => {
     try {
       setLoading(true);
@@ -74,33 +75,69 @@ export default function PianoRoll({ midiUrl }: PianoRollProps) {
       }
 
       const arrayBuffer = await response.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-
-      // Parse MIDI file (dynamic import to avoid bundling server-side code)
-      const { MIDIReader } = await import(
-        "../lib/midi-file-reader/midi-reader.ts"
-      );
-      const midiFile = MIDIReader.fromBuffer(uint8Array);
-
-      // Transform to visual notes
-      const { notes, metadata } = transformMIDIToNotes(midiFile);
-      notesRef.current = notes;
-      metadataRef.current = metadata;
-
-      // Reset view to show all notes
-      if (rendererRef.current) {
-        rendererRef.current.resetView(
-          metadata.minPitch,
-          metadata.maxPitch,
-          metadata.totalDuration,
-        );
-      }
+      await parseMIDIBuffer(arrayBuffer);
 
       setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load MIDI file");
       setLoading(false);
     }
+  };
+
+  // Load and parse MIDI file from uploaded File
+  const handleFileUpload = async (file: File) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Read file as ArrayBuffer
+      const arrayBuffer = await file.arrayBuffer();
+      await parseMIDIBuffer(arrayBuffer);
+
+      setLoading(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load MIDI file");
+      setLoading(false);
+    }
+  };
+
+  // Parse MIDI buffer and render
+  const parseMIDIBuffer = async (arrayBuffer: ArrayBuffer) => {
+    const uint8Array = new Uint8Array(arrayBuffer);
+
+    // Parse MIDI file (dynamic import to avoid bundling server-side code)
+    const { MIDIReader } = await import(
+      "../lib/midi-file-reader/midi-reader.ts"
+    );
+    const midiFile = MIDIReader.fromBuffer(uint8Array);
+
+    // Transform to visual notes
+    const { notes, metadata } = transformMIDIToNotes(midiFile);
+    notesRef.current = notes;
+    metadataRef.current = metadata;
+
+    // Reset view to show all notes
+    if (rendererRef.current) {
+      rendererRef.current.resetView(
+        metadata.minPitch,
+        metadata.maxPitch,
+        metadata.totalDuration,
+      );
+    }
+  };
+
+  // Handle file input change
+  const handleFileInputChange = (e: Event) => {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (file) {
+      handleFileUpload(file);
+    }
+  };
+
+  // Trigger file input click
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
   };
 
   // Mouse/touch drag handlers for panning
@@ -178,6 +215,21 @@ export default function PianoRoll({ midiUrl }: PianoRollProps) {
     <div class="w-full h-full flex flex-col">
       {/* Controls */}
       <div class="flex gap-2 p-4 bg-gray-800 border-b border-gray-700">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".mid,.midi"
+          onChange={handleFileInputChange}
+          class="hidden"
+        />
+        <button
+          type="button"
+          onClick={handleUploadClick}
+          class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded disabled:opacity-50"
+          disabled={loading}
+        >
+          Upload MIDI
+        </button>
         <button
           type="button"
           onClick={handleZoomIn}
