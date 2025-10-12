@@ -35,8 +35,7 @@ export class MIDIReader {
    */
   static async fromFile(filePath: string): Promise<MIDIFile> {
     const data = await Deno.readFile(filePath);
-    const reader = new MIDIReader(data);
-    return reader.parse();
+    return MIDIReader.fromBuffer(data);
   }
 
   /**
