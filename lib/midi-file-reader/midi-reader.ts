@@ -17,7 +17,7 @@ import {
   type TempoEvent,
   type TextEvent,
   type TimeSignatureEvent,
-} from "./midi-types.ts";
+} from "../midi-types.ts";
 
 /**
  * MIDIReader class for parsing MIDI files and creating an internal representation

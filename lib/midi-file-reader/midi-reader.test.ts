@@ -1,12 +1,12 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { MIDIReader } from "./midi-reader.ts";
-import { MetaEventType, MIDIEventType, MIDIFormat } from "./midi-types.ts";
+import { MetaEventType, MIDIEventType, MIDIFormat } from "../midi-types.ts";
 import type {
   NoteEvent,
   TempoEvent,
   TextEvent,
   TimeSignatureEvent,
-} from "./midi-types.ts";
+} from "../midi-types.ts";
 
 /**
  * Helper function to create a simple MIDI file buffer
@@ -315,4 +315,47 @@ Deno.test("MIDIReader - handle all events in track", () => {
 
   // Should have: track name, tempo, time signature, note on, note off, end of track
   assertEquals(midi.tracks[0].events.length >= 6, true);
+});
+
+Deno.test("MIDIReader - parse real Bach.mid file", async () => {
+  const filePath = new URL("./Bach.mid", import.meta.url).pathname;
+  const midi = await MIDIReader.fromFile(filePath);
+
+  // Verify header is valid
+  assertEquals(midi.header.format >= 0 && midi.header.format <= 2, true);
+  assertEquals(midi.header.trackCount > 0, true);
+  assertEquals(midi.header.timeDivision > 0, true);
+
+  // Verify we have the expected number of tracks
+  assertEquals(midi.tracks.length, midi.header.trackCount);
+
+  // Verify all tracks have events
+  for (const track of midi.tracks) {
+    assertEquals(track.events.length > 0, true);
+  }
+
+  // Count note events across all tracks
+  let totalNoteEvents = 0;
+  for (const track of midi.tracks) {
+    const noteEvents = track.events.filter((e) =>
+      e.type === MIDIEventType.NoteOn || e.type === MIDIEventType.NoteOff
+    );
+    totalNoteEvents += noteEvents.length;
+  }
+
+  // Bach file should have many note events
+  assertEquals(totalNoteEvents > 0, true);
+
+  // Log some info about the file for inspection
+  console.log(
+    `Bach.mid - Format: ${midi.header.format}, Tracks: ${midi.header.trackCount}, Division: ${midi.header.timeDivision}`,
+  );
+  console.log(`Total note events: ${totalNoteEvents}`);
+
+  for (let i = 0; i < midi.tracks.length; i++) {
+    const track = midi.tracks[i];
+    console.log(
+      `Track ${i}: ${track.name || "Unnamed"}, Events: ${track.events.length}`,
+    );
+  }
 });
