@@ -213,13 +213,23 @@ export class PianoRollRenderer {
   /**
    * Render the piano roll
    */
-  render(notes: VisualNote[]): void {
+  render(
+    notes: VisualNote[],
+    playheadTime?: number,
+    trackCount?: number,
+  ): void {
     const gl = this.gl;
     if (!this.program || !this.vao) return;
 
     // Clear canvas
     gl.clearColor(...this.backgroundColor);
     gl.clear(gl.COLOR_BUFFER_BIT);
+
+    // Draw grid lines first (behind notes)
+    this.renderNoteLanes();
+    if (trackCount) {
+      this.renderTrackSeparators(notes, trackCount);
+    }
 
     // Filter notes in viewport for better performance
     const visibleNotes = notes.filter((note) => {
@@ -268,6 +278,193 @@ export class PianoRollRenderer {
     // Draw instanced
     gl.bindVertexArray(this.vao);
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, visibleNotes.length);
+    gl.bindVertexArray(null);
+
+    // Draw playhead if provided
+    if (playheadTime !== undefined) {
+      this.renderPlayhead(playheadTime);
+    }
+  }
+
+  /**
+   * Render the playhead line
+   */
+  private renderPlayhead(time: number): void {
+    const gl = this.gl;
+    if (!this.program) return;
+
+    // Check if playhead is in viewport
+    if (time < this.viewportX || time > this.viewportX + this.viewportWidth) {
+      return;
+    }
+
+    // Create thin vertical line spanning full viewport height
+    // Render as multiple stacked quads since each quad is 0.8 units tall
+    const lineWidth = 0.002 * this.viewportWidth;
+    const pitchStart = Math.floor(this.viewportY);
+    const pitchEnd = Math.ceil(this.viewportY + this.viewportHeight);
+    const pitchCount = pitchEnd - pitchStart;
+
+    // Create instance data for all pitch levels
+    const instanceData = new Float32Array(pitchCount * 4);
+    for (let i = 0; i < pitchCount; i++) {
+      const offset = i * 4;
+      instanceData[offset + 0] = pitchStart + i; // pitch
+      instanceData[offset + 1] = time - lineWidth / 2; // startTime
+      instanceData[offset + 2] = lineWidth; // duration
+      instanceData[offset + 3] = 127; // velocity
+    }
+
+    // Upload playhead data
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, instanceData, gl.DYNAMIC_DRAW);
+
+    // Use program with red color for playhead
+    gl.useProgram(this.program);
+
+    const viewportPosLoc = gl.getUniformLocation(this.program, "u_viewportPos");
+    const viewportSizeLoc = gl.getUniformLocation(
+      this.program,
+      "u_viewportSize",
+    );
+    const resolutionLoc = gl.getUniformLocation(this.program, "u_resolution");
+    const noteColorLoc = gl.getUniformLocation(this.program, "u_noteColor");
+
+    gl.uniform2f(viewportPosLoc, this.viewportX, this.viewportY);
+    gl.uniform2f(viewportSizeLoc, this.viewportWidth, this.viewportHeight);
+    gl.uniform2f(resolutionLoc, gl.canvas.width, gl.canvas.height);
+    gl.uniform4f(noteColorLoc, 1.0, 0.2, 0.2, 0.9); // Red playhead
+
+    // Draw playhead
+    gl.bindVertexArray(this.vao);
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, pitchCount);
+    gl.bindVertexArray(null);
+  }
+
+  /**
+   * Render horizontal note lanes (piano roll grid)
+   */
+  private renderNoteLanes(): void {
+    const gl = this.gl;
+    if (!this.program) return;
+
+    const pitchStart = Math.floor(this.viewportY);
+    const pitchEnd = Math.ceil(this.viewportY + this.viewportHeight);
+    const _lineHeight = 0.02; // Thin lines
+
+    const lines: number[] = [];
+    for (let pitch = pitchStart; pitch <= pitchEnd; pitch++) {
+      // Draw line at each pitch
+      lines.push(
+        pitch, // pitch
+        this.viewportX, // startTime
+        this.viewportWidth, // duration (spans entire viewport width)
+        127, // velocity
+      );
+    }
+
+    if (lines.length === 0) return;
+
+    const instanceData = new Float32Array(lines);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, instanceData, gl.DYNAMIC_DRAW);
+
+    gl.useProgram(this.program);
+
+    const viewportPosLoc = gl.getUniformLocation(this.program, "u_viewportPos");
+    const viewportSizeLoc = gl.getUniformLocation(
+      this.program,
+      "u_viewportSize",
+    );
+    const resolutionLoc = gl.getUniformLocation(this.program, "u_resolution");
+    const noteColorLoc = gl.getUniformLocation(this.program, "u_noteColor");
+
+    gl.uniform2f(viewportPosLoc, this.viewportX, this.viewportY);
+    gl.uniform2f(viewportSizeLoc, this.viewportWidth, this.viewportHeight);
+    gl.uniform2f(resolutionLoc, gl.canvas.width, gl.canvas.height);
+    gl.uniform4f(noteColorLoc, 0.2, 0.2, 0.25, 0.3); // Subtle gray lines
+
+    gl.bindVertexArray(this.vao);
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, lines.length / 4);
+    gl.bindVertexArray(null);
+  }
+
+  /**
+   * Render vertical track separator lines
+   */
+  private renderTrackSeparators(notes: VisualNote[], trackCount: number): void {
+    const gl = this.gl;
+    if (!this.program || trackCount <= 1) return;
+
+    // Calculate time ranges for each track
+    const trackRanges: Array<{ startTime: number; endTime: number }> = [];
+    for (let track = 0; track < trackCount; track++) {
+      const trackNotes = notes.filter((n) => n.track === track);
+      if (trackNotes.length === 0) continue;
+
+      const startTime = Math.min(...trackNotes.map((n) => n.startTime));
+      const endTime = Math.max(
+        ...trackNotes.map((n) => n.startTime + n.duration),
+      );
+      trackRanges.push({ startTime, endTime });
+    }
+
+    // Draw vertical separator lines between tracks
+    const separators: number[] = [];
+    const lineWidth = 0.005 * this.viewportWidth;
+
+    for (let i = 0; i < trackRanges.length - 1; i++) {
+      const endTime = trackRanges[i].endTime;
+      const nextStartTime = trackRanges[i + 1].startTime;
+
+      // Draw separator in the gap between tracks
+      const separatorTime = (endTime + nextStartTime) / 2;
+
+      // Only draw if visible
+      if (
+        separatorTime >= this.viewportX &&
+        separatorTime <= this.viewportX + this.viewportWidth
+      ) {
+        const pitchStart = Math.floor(this.viewportY);
+        const pitchEnd = Math.ceil(this.viewportY + this.viewportHeight);
+
+        // Create vertical line spanning all pitches
+        for (let pitch = pitchStart; pitch < pitchEnd; pitch++) {
+          separators.push(
+            pitch,
+            separatorTime - lineWidth / 2,
+            lineWidth,
+            127,
+          );
+        }
+      }
+    }
+
+    if (separators.length === 0) return;
+
+    const instanceData = new Float32Array(separators);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, instanceData, gl.DYNAMIC_DRAW);
+
+    gl.useProgram(this.program);
+
+    const viewportPosLoc = gl.getUniformLocation(this.program, "u_viewportPos");
+    const viewportSizeLoc = gl.getUniformLocation(
+      this.program,
+      "u_viewportSize",
+    );
+    const resolutionLoc = gl.getUniformLocation(this.program, "u_resolution");
+    const noteColorLoc = gl.getUniformLocation(this.program, "u_noteColor");
+
+    gl.uniform2f(viewportPosLoc, this.viewportX, this.viewportY);
+    gl.uniform2f(viewportSizeLoc, this.viewportWidth, this.viewportHeight);
+    gl.uniform2f(resolutionLoc, gl.canvas.width, gl.canvas.height);
+    gl.uniform4f(noteColorLoc, 0.5, 0.5, 0.6, 0.6); // Brighter separator lines
+
+    gl.bindVertexArray(this.vao);
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, separators.length / 4);
     gl.bindVertexArray(null);
   }
 

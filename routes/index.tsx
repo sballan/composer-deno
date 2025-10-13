@@ -1,32 +1,25 @@
-import { useSignal } from "@preact/signals";
 import { Head } from "fresh/runtime";
 import { define } from "../utils.ts";
-import Counter from "../islands/Counter.tsx";
 
-export default define.page(function Home(ctx) {
-  const count = useSignal(3);
-
-  console.log("Shared value " + ctx.state.shared);
-
+export default define.page(function Home() {
   return (
-    <div class="px-4 py-8 mx-auto fresh-gradient min-h-screen">
+    <div class="px-4 py-8 mx-auto min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
       <Head>
-        <title>Fresh counter</title>
+        <title>Composer - MIDI Music Creation</title>
       </Head>
-      <div class="max-w-screen-md mx-auto flex flex-col items-center justify-center">
-        <img
-          class="my-6"
-          src="/logo.svg"
-          width="128"
-          height="128"
-          alt="the Fresh logo: a sliced lemon dripping with juice"
-        />
-        <h1 class="text-4xl font-bold">Welcome to Fresh</h1>
-        <p class="my-4">
-          Try updating this message in the
-          <code class="mx-2">./routes/index.tsx</code> file, and refresh.
+      <div class="max-w-screen-md mx-auto flex flex-col items-center justify-center text-center">
+        <h1 class="text-6xl font-bold text-white mb-4">
+          Composer
+        </h1>
+        <p class="text-xl text-gray-300 mb-12">
+          Create beautiful music with our intuitive MIDI editor
         </p>
-        <Counter count={count} />
+        <a
+          href="/piano-roll"
+          class="px-8 py-4 bg-purple-600 hover:bg-purple-700 text-white text-lg font-semibold rounded-lg shadow-lg transition-colors duration-200"
+        >
+          Piano Roll
+        </a>
       </div>
     </div>
   );
