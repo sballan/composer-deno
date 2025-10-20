@@ -1,17 +1,21 @@
-# Fresh project
+# Composer
 
-Your new Fresh project is ready to go. You can follow the Fresh "Getting
-Started" guide here: https://fresh.deno.dev/docs/getting-started
+An in browser music editor.
 
-### Usage
+## Things you can do
 
-Make sure to install Deno:
-https://docs.deno.com/runtime/getting_started/installation
+- Play midi files in your browser. You can upload them directly from your
+  desktop
+- Transport controls to play, pause.
+- Mute and Solo each track
 
-Then start the project in development mode:
+## User Interface
 
-```
-deno task dev
-```
+### Piano Roll
 
-This will watch the project directory and restart as necessary.
+In the Piano roll, you can see your midi file on display with a grid of musical
+notes. This view has a few parts:
+
+- The _grid_ is rendered in a _canvas_ element.
+- The _ui_ is rendered with preact, and hosts the _grid_. The UI is created
+  here, with buttons displayed around the _grid_.
