@@ -551,6 +551,44 @@ export class PianoRollRenderer {
   }
 
   /**
+   * Set viewport directly
+   */
+  setViewport(x: number, y: number, width: number, height: number): void {
+    this.viewportX = x;
+    this.viewportY = Math.max(0, Math.min(127 - height, y));
+    this.viewportWidth = Math.max(1, Math.min(100, width));
+    this.viewportHeight = Math.max(12, Math.min(128, height));
+  }
+
+  /**
+   * Zoom only horizontally (time axis)
+   */
+  zoomX(factor: number, centerX = 0.5): void {
+    const worldX = this.viewportX + centerX * this.viewportWidth;
+    this.viewportWidth *= factor;
+    this.viewportX = worldX - centerX * this.viewportWidth;
+
+    // Clamp zoom level
+    this.viewportWidth = Math.max(1, Math.min(100, this.viewportWidth));
+  }
+
+  /**
+   * Zoom only vertically (pitch axis)
+   */
+  zoomY(factor: number, centerY = 0.5): void {
+    const worldY = this.viewportY + centerY * this.viewportHeight;
+    this.viewportHeight *= factor;
+    this.viewportY = worldY - centerY * this.viewportHeight;
+
+    // Clamp zoom level and position
+    this.viewportHeight = Math.max(12, Math.min(128, this.viewportHeight));
+    this.viewportY = Math.max(
+      0,
+      Math.min(127 - this.viewportHeight, this.viewportY),
+    );
+  }
+
+  /**
    * Clean up WebGL resources
    */
   destroy(): void {
